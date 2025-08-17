@@ -1,0 +1,63 @@
+<script type="module">
+  import { createFFmpeg, fetchFile } from "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.8/dist/ffmpeg.min.js";
+
+  const ffmpeg = createFFmpeg({ log: true });
+  const textInput = document.getElementById('text-input');
+  const voiceSelect = document.getElementById('voice-select');
+  const videoImage = document.getElementById('video-image');
+  const textOverlay = document.getElementById('text-overlay');
+  const messageBox = document.getElementById('message-box');
+  const audioPlayer = document.getElementById('audio-player');
+  const downloadLink = document.getElementById('download-link');
+
+  // --- مفاتيح API ---
+  const GEMINI_API_KEYS = [
+    "AIzaSyDmvJmMXMOAXeQuy8K2ofbrXZjYS-DookY",
+    "QmjIyqUCzPbPahZGOjuKjnuY7EtwIjNTb3sxbFqL7cGYl4bzkWzKRpwN"
+  ];
+  let currentKeyIndex = 0;
+  let isProcessing = false;
+
+  async function fetchWithRetry(url, options = {}) {
+    for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
+      options.headers = { ...options.headers, 'X-Goog-Api-Key': GEMINI_API_KEYS[currentKeyIndex], 'Content-Type':'application/json' };
+      try {
+        const resp = await fetch(url, options);
+        if (!resp.ok) throw new Error(await resp.text());
+        return await resp.json();
+      } catch (err) {
+        console.warn(`Key ${currentKeyIndex + 1} failed, trying next key...`, err.message);
+        currentKeyIndex = (currentKeyIndex + 1) % GEMINI_API_KEYS.length;
+      }
+    }
+    throw new Error('جميع مفاتيح Gemini فشلت.');
+  }
+
+  async function generateTextWithGemini(prompt) {
+    const payload = {
+      "contents":[{"parts":[{"text":prompt}]}]
+    };
+
+    const data = await fetchWithRetry(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      {
+        method: "POST",
+        body: JSON.stringify(payload)
+      }
+    );
+    return data;
+  }
+
+  // مثال: استخدام الدالة
+  document.getElementById('text-input').addEventListener('change', async () => {
+    try {
+      messageBox.classList.remove('hidden');
+      messageBox.innerText = 'جاري إنشاء النص...';
+      const result = await generateTextWithGemini(textInput.value);
+      console.log(result); // يمكنك تعديل الكود هنا لإظهار النص أو استخدامه في الصوت والفيديو
+      messageBox.innerText = 'تم إنشاء النص!';
+    } catch(err) {
+      messageBox.innerText = 'فشل إنشاء النص: ' + err.message;
+    }
+  });
+</script>
