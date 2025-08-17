@@ -1,63 +1,142 @@
-<script type="module">
-  import { createFFmpeg, fetchFile } from "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.8/dist/ffmpeg.min.js";
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تحويل النص إلى فيديو MP4 مع أصوات عربية</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.8/dist/ffmpeg.min.js"></script>
+  <style>
+    body { font-family:'Inter',sans-serif; direction:rtl; }
+    .video-container { width:100%;height:300px;background:#000;position:relative;border-radius:1rem;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+    .video-image { width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 0.8s ease-in-out;position:absolute;top:0;left:0;}
+    .text-overlay { position:absolute;bottom:2rem;background:rgba(0,0,0,0.6);color:white;padding:0.5rem 1rem;border-radius:0.5rem;max-width:90%;text-align:center;font-size:1.5rem;font-weight:bold;opacity:0;transition:opacity 0.5s;}
+    .loading-spinner { border:4px solid rgba(255,255,255,0.3); border-radius:50%; border-top:4px solid #fff; width:40px;height:40px; animation:spin 1s linear infinite;}
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-center justify-center min-h-screen p-4">
+  <div class="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg w-full max-w-2xl text-right">
+    <h1 class="text-3xl font-bold mb-6 text-center">تحويل النص إلى فيديو MP4 مع أصوات عربية</h1>
+    <textarea id="text-input" class="w-full h-40 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="اكتب نصك هنا..."></textarea>
+    <div class="mb-6 flex flex-col sm:flex-row items-center justify-between mt-4">
+      <select id="voice-select" class="w-full sm:w-48 p-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="Zephyr-Ar">زفير - صوت مشرق وواضح</option>
+        <option value="Kore-Ar">كور - صوت حازم وواضح</option>
+        <option value="Algenib-Ar">الجنب - صوت أجش ومؤثر</option>
+        <option value="Layla-Ar">ليلى - صوت مؤنث طبيعي</option>
+        <option value="Omar-Ar">عمر - صوت ذكوري دافئ</option>
+        <option value="Hana-Ar">هنا - صوت ناعم مؤنث</option>
+        <option value="Rami-Ar">رامي - صوت حازم وهادئ</option>
+      </select>
+    </div>
+    <div class="video-container mt-6">
+      <img id="video-image" class="video-image" src="" alt="صورة المشهد">
+      <div id="text-overlay" class="text-overlay"></div>
+      <p id="message-box" class="text-white text-center text-lg p-4 hidden">جاري التحويل...</p>
+      <audio id="audio-player" controls class="hidden"></audio>
+    </div>
+    <a id="download-link" class="mt-4 block bg-green-600 text-white px-4 py-2 rounded-xl text-center hidden" download="video.mp4">تحميل الفيديو</a>
+  </div>
 
-  const ffmpeg = createFFmpeg({ log: true });
-  const textInput = document.getElementById('text-input');
-  const voiceSelect = document.getElementById('voice-select');
-  const videoImage = document.getElementById('video-image');
-  const textOverlay = document.getElementById('text-overlay');
-  const messageBox = document.getElementById('message-box');
-  const audioPlayer = document.getElementById('audio-player');
-  const downloadLink = document.getElementById('download-link');
+  <script type="module">
+  window.addEventListener('DOMContentLoaded', async () => {
 
-  // --- مفاتيح API ---
-  const GEMINI_API_KEYS = [
-    "AIzaSyDmvJmMXMOAXeQuy8K2ofbrXZjYS-DookY",
-    "QmjIyqUCzPbPahZGOjuKjnuY7EtwIjNTb3sxbFqL7cGYl4bzkWzKRpwN"
-  ];
-  let currentKeyIndex = 0;
-  let isProcessing = false;
+    import { createFFmpeg, fetchFile } from "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.8/dist/ffmpeg.min.js";
 
-  async function fetchWithRetry(url, options = {}) {
-    for (let i = 0; i < GEMINI_API_KEYS.length; i++) {
-      options.headers = { ...options.headers, 'X-Goog-Api-Key': GEMINI_API_KEYS[currentKeyIndex], 'Content-Type':'application/json' };
-      try {
-        const resp = await fetch(url, options);
-        if (!resp.ok) throw new Error(await resp.text());
-        return await resp.json();
-      } catch (err) {
-        console.warn(`Key ${currentKeyIndex + 1} failed, trying next key...`, err.message);
-        currentKeyIndex = (currentKeyIndex + 1) % GEMINI_API_KEYS.length;
+    const ffmpeg = createFFmpeg({ log:true });
+    const textInput = document.getElementById('text-input');
+    const voiceSelect = document.getElementById('voice-select');
+    const videoImage = document.getElementById('video-image');
+    const textOverlay = document.getElementById('text-overlay');
+    const messageBox = document.getElementById('message-box');
+    const audioPlayer = document.getElementById('audio-player');
+    const downloadLink = document.getElementById('download-link');
+
+    const GEMINI_API_KEYS = [
+      "AIzaSyDmvJmMXMOAXeQuy8K2ofbrXZjYS-DookY",
+      "QmjIyqUCzPbPahZGOjuKjnuY7EtwIjNTb3sxbFqL7cGYl4bzkWzKRpwN"
+    ];
+    const PEXELS_API_KEY = "ضع هنا مفتاح Pexels الحقيقي";
+    let currentKeyIndex = 0;
+    let isProcessing = false;
+
+    async function fetchWithRetry(url, options={}) {
+      for(let i=0;i<GEMINI_API_KEYS.length;i++){
+        options.headers = {...options.headers, 'X-Goog-Api-Key': GEMINI_API_KEYS[currentKeyIndex], 'Content-Type':'application/json'};
+        try{
+          const resp = await fetch(url, options);
+          if(!resp.ok) throw new Error(await resp.text());
+          return await resp.json();
+        }catch(err){
+          console.warn(`Key ${currentKeyIndex+1} failed, trying next key...`, err.message);
+          currentKeyIndex = (currentKeyIndex+1)%GEMINI_API_KEYS.length;
+        }
       }
+      throw new Error('جميع مفاتيح Gemini فشلت.');
     }
-    throw new Error('جميع مفاتيح Gemini فشلت.');
-  }
 
-  async function generateTextWithGemini(prompt) {
-    const payload = {
-      "contents":[{"parts":[{"text":prompt}]}]
-    };
+    async function generateTextWithGemini(prompt){
+      const payload = {"contents":[{"parts":[{"text":prompt}]}]};
+      return await fetchWithRetry("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      {method:"POST",body:JSON.stringify(payload)});
+    }
 
-    const data = await fetchWithRetry(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-      {
-        method: "POST",
-        body: JSON.stringify(payload)
-      }
-    );
-    return data;
-  }
+    async function fetchRandomImageFromPexels() {
+      const resp = await fetch("https://api.pexels.com/v1/search?query=nature&per_page=1", {
+        headers:{Authorization:PEXELS_API_KEY}
+      });
+      const data = await resp.json();
+      if(data.photos && data.photos.length>0) return data.photos[0].src.medium;
+      throw new Error("لم يتم العثور على صورة");
+    }
 
-  // مثال: استخدام الدالة
-  document.getElementById('text-input').addEventListener('change', async () => {
-    try {
+    async function generateVideo(text, voice) {
+      if(isProcessing) return;
+      isProcessing = true;
       messageBox.classList.remove('hidden');
-      messageBox.innerText = 'جاري إنشاء النص...';
-      const result = await generateTextWithGemini(textInput.value);
-      console.log(result); // يمكنك تعديل الكود هنا لإظهار النص أو استخدامه في الصوت والفيديو
-      messageBox.innerText = 'تم إنشاء النص!';
-    } catch(err) {
-      messageBox.innerText = 'فشل إنشاء النص: ' + err.message;
+      messageBox.innerText = "جاري إنشاء الفيديو...";
+      downloadLink.classList.add('hidden');
+
+      try{
+        const geminiResult = await generateTextWithGemini(text);
+        console.log("Gemini Result:", geminiResult);
+
+        const imageUrl = await fetchRandomImageFromPexels();
+        videoImage.src = imageUrl;
+        videoImage.style.opacity = 1;
+
+        // --- توليد الصوت باستخدام SpeechSynthesis ---
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "ar-SA";
+        speechSynthesis.speak(utterance);
+
+        // --- توليد فيديو MP4 مؤقت (مثال: عرض الصورة فقط لمدة 5 ثوانٍ) ---
+        if(!ffmpeg.isLoaded()) await ffmpeg.load();
+        const imgResponse = await fetch(imageUrl);
+        const imgData = await imgResponse.arrayBuffer();
+        ffmpeg.FS('writeFile','image.png',new Uint8Array(imgData));
+
+        // إنشاء فيديو من الصورة فقط (5 ثوانٍ، 30fps)
+        await ffmpeg.run('-loop','1','-i','image.png','-c:v','libx264','-t','5','-pix_fmt','yuv420p','output.mp4');
+
+        const data = ffmpeg.FS('readFile','output.mp4');
+        const videoBlob = new Blob([data.buffer],{type:'video/mp4'});
+        const videoURL = URL.createObjectURL(videoBlob);
+        downloadLink.href = videoURL;
+        downloadLink.classList.remove('hidden');
+
+        messageBox.innerText = "تم إنشاء الفيديو!";
+
+      }catch(err){
+        messageBox.innerText = "فشل إنشاء الفيديو: "+err.message;
+      }
+
+      isProcessing = false;
     }
+
+    textInput.addEventListener('change',()=>generateVideo(textInput.value, voiceSelect.value));
+
   });
-</script>
+  </script>
+</body>
+</html>
